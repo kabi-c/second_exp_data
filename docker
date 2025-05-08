@@ -1,0 +1,59 @@
+FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS base
+WORKDIR /app
+EXPOSE 80
+
+# Build the app using .NET SDK
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+WORKDIR /src
+COPY . .
+RUN dotnet publish -c Release -o /app
+
+# Copy from build stage to base stage
+FROM base AS final
+WORKDIR /app
+COPY --from=build /app .
+ENTRYPOINT ["dotnet", "YourApp.dll"]
+Replace YourApp.dll with your actual project output DLL file name.
+
+Step 5: Create GitHub Actions Workflow (deploy.yml)
+Create a new directory .github/workflows in your repository, and add a deploy.yml file.
+name: Build and Deploy to AKS
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE_NAME: dotnetiotapp
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Log in to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Set AKS context
+      uses: azure/aks-set-context@v3
+      with:
+        resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+        cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+    - name: Log in to ACR
+      run: echo ${{ secrets.REGISTRY_PASSWORD }} | docker login ${{ secrets.REGISTRY_NAME }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
+    - name: Build Docker image
+      run: docker build -t ${{ secrets.REGISTRY_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+
+    - name: Push Docker image
+      run: docker push ${{ secrets.REGISTRY_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    - name: Deploy to AKS
+      run: |
+        kubectl set image deployment/dotnetiot-deployment dotnetiot-container=${{ secrets.REGISTRY_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
