@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dotnetiot-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dotnetiot
+  template:
+    metadata:
+      labels:
+        app: dotnetiot
+    spec:
+      containers:
+      - name: dotnetiot-container
+        image: <your-acr-name>.azurecr.io/dotnetiotapp:latest
+        ports:
+        - containerPort: 80
